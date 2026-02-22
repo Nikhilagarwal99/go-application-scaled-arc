@@ -4,15 +4,15 @@ WORKDIR /app
 
 RUN apk add --no-cache git
 
-# Install air
+# Install Air hot-reload
 RUN go install github.com/air-verse/air@latest
 
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Don't copy source code here
-# It will be mounted as volume
+# Source code is mounted as volume from docker-compose
+# so we don't COPY it here — Air watches for changes and rebuilds
 
-EXPOSE 8011
+EXPOSE 7003
 
 CMD ["air"]
