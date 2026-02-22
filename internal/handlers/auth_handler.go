@@ -33,19 +33,14 @@ func NewAuthHandler(authSvc services.AuthService) *AuthHandler {
 //	POST /api/v1/auth/signup
 func (h *AuthHandler) Signup(c *gin.Context) {
 	var req services.SignupRequest
-	// request validation
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.ValidationError(c, err)
 		return
 	}
-	// Service Call
+
 	res, err := h.authSvc.Signup(c.Request.Context(), &req)
 	if err != nil {
-		if err.Error() == "email already registered" {
-			response.Conflict(c, err.Error())
-			return
-		}
-		response.InternalServerError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -56,13 +51,13 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req services.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.ValidationError(c, err)
 		return
 	}
 
 	res, err := h.authSvc.Login(c.Request.Context(), &req)
 	if err != nil {
-		response.Unauthorized(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -77,7 +72,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 
 	profile, err := h.authSvc.GetProfile(c.Request.Context(), userID)
 	if err != nil {
-		response.NotFound(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -92,13 +87,13 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 
 	var req services.UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.ValidationError(c, err)
 		return
 	}
 
 	profile, err := h.authSvc.UpdateProfile(c.Request.Context(), userID, &req)
 	if err != nil {
-		response.InternalServerError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -110,7 +105,7 @@ func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	userID := mustUserID(c)
 
 	if err := h.authSvc.DeleteAccount(c.Request.Context(), userID); err != nil {
-		response.InternalServerError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -126,34 +121,34 @@ func (h *AuthHandler) SendVerifyEmail(c *gin.Context) {
 
 	var req services.SendVerifyEmailOtpRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.ValidationError(c, err)
 		return
 	}
 
 	// cal send Email Service
-	res, err := h.authSvc.SendVerifyEmail(c.Request.Context(), req.Email)
+	err := h.authSvc.SendVerifyEmail(c.Request.Context(), req.Email)
 
 	if err != nil {
-		response.BadRequest(c, err.Error())
+		response.Error(c, err)
 		return
 	}
-	response.OK(c, "Email Send Successfully", res)
+	response.OK(c, "Email Send Successfully", nil)
 }
 
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	var req services.VerifyEmailOtpRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, err.Error())
+		response.ValidationError(c, err)
 		return
 	}
 
 	// Separate the context between http gin Context and c.Request.Context here for SOC
 
-	res, err := h.authSvc.VerifyEmail(c.Request.Context(), req.Email, req.OTP)
+	err := h.authSvc.VerifyEmail(c.Request.Context(), req.Email, req.OTP)
 
 	if err != nil {
-		response.InternalServerError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
-	response.OK(c, "Email Verified Successfully", res)
+	response.OK(c, "Email Verified Successfully", nil)
 }

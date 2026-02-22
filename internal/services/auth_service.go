@@ -3,17 +3,17 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/models"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/repository"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/pkg/errorType"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-// ---- Request / Response DTOs Request Validators------------------------------------------------
+// ---- DTOs -------------------------------------------------------------------
 
 type SignupRequest struct {
 	Name     string `json:"name"     binding:"required,min=2,max=100"`
@@ -32,9 +32,10 @@ type AuthResponse struct {
 }
 
 type UserProfile struct {
-	ID    uuid.UUID `json:"id"`
-	Name  string    `json:"name"`
-	Email string    `json:"email"`
+	ID            uuid.UUID `json:"id"`
+	Name          string    `json:"name"`
+	Email         string    `json:"email"`
+	EmailVerified bool      `json:"email_verified"`
 }
 
 type UpdateProfileRequest struct {
@@ -42,15 +43,15 @@ type UpdateProfileRequest struct {
 }
 
 type SendVerifyEmailOtpRequest struct {
-	Email string `json:"email" binding:"required"`
+	Email string `json:"email" binding:"required,email"`
 }
 
 type VerifyEmailOtpRequest struct {
-	Email string `json:"email" binding:"required"`
-	OTP   string `json:"otp" binding:"required"`
+	Email string `json:"email" binding:"required,email"`
+	OTP   string `json:"otp"   binding:"required"`
 }
 
-// ---- Service interface -------------------------------------------------------
+// ---- Interface --------------------------------------------------------------
 
 type AuthService interface {
 	Signup(ctx context.Context, req *SignupRequest) (*AuthResponse, error)
@@ -58,39 +59,46 @@ type AuthService interface {
 	GetProfile(ctx context.Context, id uuid.UUID) (*UserProfile, error)
 	UpdateProfile(ctx context.Context, id uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error)
 	DeleteAccount(ctx context.Context, id uuid.UUID) error
-	SendVerifyEmail(ctx context.Context, email string) (map[string]any, error)
-	VerifyEmail(ctx context.Context, email, otp string) (map[string]any, error)
+	SendVerifyEmail(ctx context.Context, email string) error
+	VerifyEmail(ctx context.Context, email, otp string) error
 }
+
+// ---- Struct + Constructor ---------------------------------------------------
 
 type authService struct {
 	repo           repository.UserRepository
+	otpService     repository.OTPRepository
+	mailService    *utils.MailService
 	jwtSecret      string
 	jwtExpiryHours int
-	mailService    *utils.MailService
-	otpService     repository.OTPRepository
 }
 
-// NewAuthService wires up the auth service with its dependencies.
-func NewAuthService(repo repository.UserRepository, jwtSecret string, jwtExpiryHours int, otpService repository.OTPRepository, mailService *utils.MailService) AuthService {
+func NewAuthService(
+	repo repository.UserRepository,
+	otpService repository.OTPRepository,
+	mailService *utils.MailService,
+	jwtSecret string,
+	jwtExpiryHours int,
+) AuthService {
 	return &authService{
 		repo:           repo,
+		otpService:     otpService,
+		mailService:    mailService,
 		jwtSecret:      jwtSecret,
 		jwtExpiryHours: jwtExpiryHours,
-		mailService:    mailService,
-		otpService:     otpService,
 	}
 }
 
-// Signup creates a new user account and returns a JWT.
+// ---- Methods ----------------------------------------------------------------
+
 func (s *authService) Signup(ctx context.Context, req *SignupRequest) (*AuthResponse, error) {
-	// Check for existing email
 	if _, err := s.repo.FindByEmail(ctx, req.Email); err == nil {
-		return nil, errors.New("email already registered")
+		return nil, errorType.ErrEmailAlreadyRegistered
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, errors.New("failed to hash password")
+		return nil, errorType.ErrInternalServer
 	}
 
 	user := &models.User{
@@ -100,142 +108,111 @@ func (s *authService) Signup(ctx context.Context, req *SignupRequest) (*AuthResp
 	}
 
 	if err := s.repo.Create(ctx, user); err != nil {
-		return nil, errors.New("failed to create user")
+		return nil, errorType.ErrFailedToCreateUser
 	}
 
 	return s.buildAuthResponse(user)
 }
 
-// Login validates credentials and returns a JWT.
 func (s *authService) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
 	user, err := s.repo.FindByEmail(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invalid email or password")
+			return nil, errorType.ErrInvalidCredentials
 		}
-		return nil, errors.New("something went wrong")
+		return nil, errorType.ErrInternalServer
 	}
 
-	if user.EmailVerified != true {
-		return nil, errors.New("Email Not verified Error")
+	if !user.EmailVerified {
+		return nil, errorType.ErrEmailNotVerified
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		return nil, errors.New("invalid email or password")
+		return nil, errorType.ErrInvalidCredentials
 	}
 
 	return s.buildAuthResponse(user)
 }
 
-// GetProfile fetches a user's public profile by ID.
 func (s *authService) GetProfile(ctx context.Context, id uuid.UUID) (*UserProfile, error) {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return nil, errors.New("user not found")
+		return nil, errorType.ErrUserNotFound
 	}
 	return toProfile(user), nil
 }
 
-// UpdateProfile changes the user's name.
 func (s *authService) UpdateProfile(ctx context.Context, id uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error) {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return nil, errors.New("user not found")
+		return nil, errorType.ErrUserNotFound
 	}
 
 	user.Name = req.Name
 	if err := s.repo.Update(ctx, user); err != nil {
-		return nil, errors.New("failed to update profile")
+		return nil, errorType.ErrFailedToUpdateUser
 	}
 	return toProfile(user), nil
 }
 
-// DeleteAccount soft-deletes the user record.
 func (s *authService) DeleteAccount(ctx context.Context, id uuid.UUID) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
-		return errors.New("failed to delete account")
+		return errorType.ErrFailedToDeleteUser
 	}
 	return nil
 }
 
-func (s *authService) SendVerifyEmail(ctx context.Context, email string) (map[string]any, error) {
-	//check if user exist else return
+func (s *authService) SendVerifyEmail(ctx context.Context, email string) error {
 	user, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
-		return nil, errors.New("user not found")
+		return errorType.ErrUserNotFound
 	}
-
-	var emailDb string = user.Email
-
-	if emailDb != email {
-		return nil, errors.New("Email mismatch error type")
-	}
-
-	// check if existed user already verified his email if yes return
 
 	if user.EmailVerified {
-		return nil, errors.New("Email is already Verified")
+		return errorType.ErrEmailAlreadyVerified
 	}
 
 	otp, err := utils.GenerateOTP()
-
 	if err != nil {
-		return nil, errors.New("Failed to generate Otp")
+		return errorType.ErrFailedToGenerateOTP
 	}
 
-	// save Otp in redis
-
-	_err := s.otpService.Save(ctx, user.Email, otp)
-	if _err != nil {
-		return nil, errors.New("Failed to save Otp")
-	}
-	// call utils function to send verify email on success send success response  else return error
-
-	mailJetError := s.mailService.SendVerifyEmail(email, otp)
-
-	if mailJetError != nil {
-		return nil, errors.New("Email Service is temporary down")
+	if err := s.otpService.Save(ctx, user.Email, otp); err != nil {
+		return errorType.ErrFailedToStoreOTP
 	}
 
-	return map[string]any{
-		"message": "Email Send Successfully",
-	}, nil
+	if err := s.mailService.SendVerifyEmail(email, otp); err != nil {
+		return errorType.ErrEmailServiceDown
+	}
 
+	return nil
 }
 
-func (s *authService) VerifyEmail(ctx context.Context, email, otp string) (map[string]any, error) {
-
-	// call utils function to verify email on success send success response  else return error
-
-	fmt.Println("Nikhil00huihi", email)
-	cacheOTP, err := s.otpService.Get(ctx, email)
+func (s *authService) VerifyEmail(ctx context.Context, email, otp string) error {
+	cachedOTP, err := s.otpService.Get(ctx, email)
 	if err != nil {
-		return nil, errors.New("Otp Expired, Please initiate again")
+		return errorType.ErrOTPExpired
 	}
-	fmt.Println("Nikhil-------------", cacheOTP, otp)
-	if cacheOTP != otp {
-		return nil, errors.New("Invalid Otp")
+
+	if cachedOTP != otp {
+		return errorType.ErrInvalidOTP
 	}
 
 	user, err := s.repo.FindByEmail(ctx, email)
-
 	if err != nil {
-		return nil, errors.New("User not found")
+		return errorType.ErrUserNotFound
 	}
 
 	if user.EmailVerified {
-		return nil, errors.New("Email is already verified error")
-	} else {
-		user.EmailVerified = true
+		return errorType.ErrEmailAlreadyVerified
 	}
 
-	// call the model to update email verified
-
+	user.EmailVerified = true
 	if err := s.repo.Update(ctx, user); err != nil {
-		return nil, errors.New("Failed to update, Please try again")
+		return errorType.ErrFailedToUpdateUser
 	}
 
-	return map[string]any{"user": user}, nil
+	return nil
 }
 
 // ---- Helpers ----------------------------------------------------------------
@@ -243,11 +220,16 @@ func (s *authService) VerifyEmail(ctx context.Context, email, otp string) (map[s
 func (s *authService) buildAuthResponse(user *models.User) (*AuthResponse, error) {
 	token, err := utils.GenerateToken(user.ID, user.Email, s.jwtSecret, s.jwtExpiryHours)
 	if err != nil {
-		return nil, errors.New("failed to generate token")
+		return nil, errorType.ErrFailedToGenerateToken
 	}
 	return &AuthResponse{Token: token, User: *toProfile(user)}, nil
 }
 
 func toProfile(u *models.User) *UserProfile {
-	return &UserProfile{ID: u.ID, Name: u.Name, Email: u.Email}
+	return &UserProfile{
+		ID:            u.ID,
+		Name:          u.Name,
+		Email:         u.Email,
+		EmailVerified: u.EmailVerified,
+	}
 }

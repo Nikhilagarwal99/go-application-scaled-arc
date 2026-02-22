@@ -28,7 +28,7 @@ func NewRouter(db *gorm.DB, redis *cache.Client, cfg *config.Config) *gin.Engine
 	mailService := utils.NewMailService(cfg)
 	userRepo := repository.NewUserRepository(db)
 	otpRepo := repository.NewOTPRepository(redis)
-	authSvc := services.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiryHours, otpRepo, mailService)
+	authSvc := services.NewAuthService(userRepo, otpRepo, mailService, cfg.JWTSecret, cfg.JWTExpiryHours)
 	authHandler := handlers.NewAuthHandler(authSvc)
 	healthHandler := handlers.NewHealthHandler(db, redis)
 

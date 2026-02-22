@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/pkg/errorType"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/pkg/response"
 )
 
@@ -14,21 +15,21 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			response.Unauthorized(c, "authorization header required")
+			response.Error(c, errorType.ErrInvalidToken)
 			c.Abort()
 			return
 		}
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			response.Unauthorized(c, "authorization header format must be: Bearer <token>")
+			response.Error(c, errorType.ErrTokenFormat)
 			c.Abort()
 			return
 		}
 
 		claims, err := utils.ValidateToken(parts[1], jwtSecret)
 		if err != nil {
-			response.Unauthorized(c, "invalid or expired token")
+			response.Error(c, errorType.ErrInvalidToken)
 			c.Abort()
 			return
 		}
