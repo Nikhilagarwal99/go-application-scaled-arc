@@ -12,7 +12,7 @@ import (
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/config"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/database"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/logger"
-	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/server"
+
 	"go.uber.org/zap"
 )
 
@@ -32,7 +32,7 @@ func main() {
 	database.Migrate(db)
 
 	// 5. Boot the router with all dependencies
-	router := server.NewRouter(db, redis, cfg)
+	router := NewRouter(db, redis, cfg)
 
 	// 6. Configure HTTP server
 	srv := &http.Server{
