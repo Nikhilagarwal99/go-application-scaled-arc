@@ -2,10 +2,11 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
-	"github.com/nikhilAgarwal99/goapp/internal/config"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/config"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -47,4 +48,17 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 
 func (c *Client) Delete(ctx context.Context, key string) error {
 	return c.rdb.Del(ctx, key).Err()
+}
+
+// Ping checks whether the Redis connection is alive.
+// Uses a short timeout so a hung Redis doesn't block the health check.
+func (c *Client) Ping(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	if err := c.rdb.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("redis unreachable: %w", err)
+	}
+
+	return nil
 }

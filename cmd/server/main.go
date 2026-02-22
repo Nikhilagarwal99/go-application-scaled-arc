@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nikhilAgarwal99/goapp/internal/cache"
-	"github.com/nikhilAgarwal99/goapp/internal/config"
-	"github.com/nikhilAgarwal99/goapp/internal/database"
-	"github.com/nikhilAgarwal99/goapp/internal/server"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/cache"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/config"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/database"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/server"
 )
 
 func main() {

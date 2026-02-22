@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mailjet/mailjet-apiv3-go/v4"
-	"github.com/nikhilAgarwal99/goapp/internal/config"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/config"
 )
 
 // load the mailjet API env

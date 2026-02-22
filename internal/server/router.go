@@ -2,15 +2,15 @@ package server
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/nikhilAgarwal99/goapp/internal/cache"
-	"github.com/nikhilAgarwal99/goapp/internal/config"
-	"github.com/nikhilAgarwal99/goapp/internal/handlers"
-	"github.com/nikhilAgarwal99/goapp/internal/middleware"
-	"github.com/nikhilAgarwal99/goapp/internal/utils"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/cache"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/config"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/handlers"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/middleware"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
 	"gorm.io/gorm"
 
-	"github.com/nikhilAgarwal99/goapp/internal/repository"
-	"github.com/nikhilAgarwal99/goapp/internal/services"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/repository"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/services"
 )
 
 // NewRouter wires together all dependencies and returns a configured *gin.Engine.
@@ -30,11 +30,14 @@ func NewRouter(db *gorm.DB, redis *cache.Client, cfg *config.Config) *gin.Engine
 	otpRepo := repository.NewOTPRepository(redis)
 	authSvc := services.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiryHours, otpRepo, mailService)
 	authHandler := handlers.NewAuthHandler(authSvc)
+	healthHandler := handlers.NewHealthHandler(db, redis)
+
+	// --- Shorthand so routes stay readable ---
+	withTx := middleware.Transaction(db)
+	withAuth := middleware.Auth(cfg.JWTSecret)
 
 	// --- Health check ---
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
+	router.GET("/health", healthHandler.Check)
 
 	// --- API v1 ---
 	v1 := router.Group("/api/v1")
@@ -42,19 +45,18 @@ func NewRouter(db *gorm.DB, redis *cache.Client, cfg *config.Config) *gin.Engine
 		// Public auth routes
 		auth := v1.Group("/auth")
 		{
-			auth.POST("/signup", authHandler.Signup)
-			auth.POST("/login", authHandler.Login)
+			auth.POST("/signup", withTx, authHandler.Signup)
+			auth.POST("/login", withTx, authHandler.Login)
 			auth.POST("/send-verify-email-otp", authHandler.SendVerifyEmail)
-			auth.POST("/verify-email", authHandler.VerifyEmail)
+			auth.POST("/verify-email", withTx, authHandler.VerifyEmail)
 		}
 
 		// Protected user routes (JWT required)
 		users := v1.Group("/users")
-		users.Use(middleware.Auth(cfg.JWTSecret))
 		{
-			users.GET("/", authHandler.GetProfile)
-			users.PUT("/", authHandler.UpdateProfile)
-			users.DELETE("/", authHandler.DeleteAccount)
+			users.GET("/", withAuth, authHandler.GetProfile)
+			users.PUT("/", withAuth, withTx, authHandler.UpdateProfile)
+			users.DELETE("/", withAuth, withTx, authHandler.DeleteAccount)
 
 		}
 	}

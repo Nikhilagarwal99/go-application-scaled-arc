@@ -19,6 +19,15 @@ type Config struct {
 	DBName     string
 	DBSSLMode  string
 
+	// Slave — handles all reads
+	// Add more slaves by adding DBSlave2Host etc.
+	DBSlaveHost     string
+	DBSlavePort     string
+	DBSlaveUser     string
+	DBSlavePassword string
+	DBSlaveName     string
+	DBSlaveSSLMode  string
+
 	JWTSecret      string
 	JWTExpiryHours int
 
@@ -57,6 +66,16 @@ func Load() *Config {
 		DBPassword: getEnv("DB_PASSWORD", ""),
 		DBName:     getEnv("DB_NAME", "goapp_db"),
 		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
+
+		// Slave — falls back to master values if not set.
+		// This means in development with one DB, everything
+		// still works without any slave configured.
+		DBSlaveHost:     getEnv("DB_SLAVE_HOST", getEnv("DB_HOST", "localhost")),
+		DBSlavePort:     getEnv("DB_SLAVE_PORT", getEnv("DB_PORT", "5432")),
+		DBSlaveUser:     getEnv("DB_SLAVE_USER", getEnv("DB_USER", "postgres")),
+		DBSlavePassword: getEnv("DB_SLAVE_PASSWORD", getEnv("DB_PASSWORD", "")),
+		DBSlaveName:     getEnv("DB_SLAVE_NAME", getEnv("DB_NAME", "goapp_db")),
+		DBSlaveSSLMode:  getEnv("DB_SLAVE_SSLMODE", getEnv("DB_SSLMODE", "disable")),
 
 		JWTSecret:      getEnv("JWT_SECRET", "change-me"),
 		JWTExpiryHours: jwtExpiry,

@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/nikhilAgarwal99/goapp/internal/models"
-	"github.com/nikhilAgarwal99/goapp/internal/repository"
-	"github.com/nikhilAgarwal99/goapp/internal/utils"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/models"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/repository"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -53,11 +53,11 @@ type VerifyEmailOtpRequest struct {
 // ---- Service interface -------------------------------------------------------
 
 type AuthService interface {
-	Signup(req *SignupRequest) (*AuthResponse, error)
-	Login(req *LoginRequest) (*AuthResponse, error)
-	GetProfile(id uuid.UUID) (*UserProfile, error)
-	UpdateProfile(id uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error)
-	DeleteAccount(id uuid.UUID) error
+	Signup(ctx context.Context, req *SignupRequest) (*AuthResponse, error)
+	Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error)
+	GetProfile(ctx context.Context, id uuid.UUID) (*UserProfile, error)
+	UpdateProfile(ctx context.Context, id uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error)
+	DeleteAccount(ctx context.Context, id uuid.UUID) error
 	SendVerifyEmail(ctx context.Context, email string) (map[string]any, error)
 	VerifyEmail(ctx context.Context, email, otp string) (map[string]any, error)
 }
@@ -82,9 +82,9 @@ func NewAuthService(repo repository.UserRepository, jwtSecret string, jwtExpiryH
 }
 
 // Signup creates a new user account and returns a JWT.
-func (s *authService) Signup(req *SignupRequest) (*AuthResponse, error) {
+func (s *authService) Signup(ctx context.Context, req *SignupRequest) (*AuthResponse, error) {
 	// Check for existing email
-	if _, err := s.repo.FindByEmail(req.Email); err == nil {
+	if _, err := s.repo.FindByEmail(ctx, req.Email); err == nil {
 		return nil, errors.New("email already registered")
 	}
 
@@ -99,7 +99,7 @@ func (s *authService) Signup(req *SignupRequest) (*AuthResponse, error) {
 		Password: string(hashed),
 	}
 
-	if err := s.repo.Create(user); err != nil {
+	if err := s.repo.Create(ctx, user); err != nil {
 		return nil, errors.New("failed to create user")
 	}
 
@@ -107,8 +107,8 @@ func (s *authService) Signup(req *SignupRequest) (*AuthResponse, error) {
 }
 
 // Login validates credentials and returns a JWT.
-func (s *authService) Login(req *LoginRequest) (*AuthResponse, error) {
-	user, err := s.repo.FindByEmail(req.Email)
+func (s *authService) Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error) {
+	user, err := s.repo.FindByEmail(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("invalid email or password")
@@ -128,8 +128,8 @@ func (s *authService) Login(req *LoginRequest) (*AuthResponse, error) {
 }
 
 // GetProfile fetches a user's public profile by ID.
-func (s *authService) GetProfile(id uuid.UUID) (*UserProfile, error) {
-	user, err := s.repo.FindByID(id)
+func (s *authService) GetProfile(ctx context.Context, id uuid.UUID) (*UserProfile, error) {
+	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
@@ -137,22 +137,22 @@ func (s *authService) GetProfile(id uuid.UUID) (*UserProfile, error) {
 }
 
 // UpdateProfile changes the user's name.
-func (s *authService) UpdateProfile(id uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error) {
-	user, err := s.repo.FindByID(id)
+func (s *authService) UpdateProfile(ctx context.Context, id uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error) {
+	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
 
 	user.Name = req.Name
-	if err := s.repo.Update(user); err != nil {
+	if err := s.repo.Update(ctx, user); err != nil {
 		return nil, errors.New("failed to update profile")
 	}
 	return toProfile(user), nil
 }
 
 // DeleteAccount soft-deletes the user record.
-func (s *authService) DeleteAccount(id uuid.UUID) error {
-	if err := s.repo.Delete(id); err != nil {
+func (s *authService) DeleteAccount(ctx context.Context, id uuid.UUID) error {
+	if err := s.repo.Delete(ctx, id); err != nil {
 		return errors.New("failed to delete account")
 	}
 	return nil
@@ -160,7 +160,7 @@ func (s *authService) DeleteAccount(id uuid.UUID) error {
 
 func (s *authService) SendVerifyEmail(ctx context.Context, email string) (map[string]any, error) {
 	//check if user exist else return
-	user, err := s.repo.FindByEmail(email)
+	user, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
@@ -217,7 +217,7 @@ func (s *authService) VerifyEmail(ctx context.Context, email, otp string) (map[s
 		return nil, errors.New("Invalid Otp")
 	}
 
-	user, err := s.repo.FindByEmail(email)
+	user, err := s.repo.FindByEmail(ctx, email)
 
 	if err != nil {
 		return nil, errors.New("User not found")
@@ -231,7 +231,7 @@ func (s *authService) VerifyEmail(ctx context.Context, email, otp string) (map[s
 
 	// call the model to update email verified
 
-	if err := s.repo.Update(user); err != nil {
+	if err := s.repo.Update(ctx, user); err != nil {
 		return nil, errors.New("Failed to update, Please try again")
 	}
 

@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/nikhilAgarwal99/goapp/internal/utils"
-	"github.com/nikhilAgarwal99/goapp/pkg/response"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/pkg/response"
 )
 
 // Auth validates the Bearer JWT on protected routes and injects

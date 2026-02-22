@@ -3,8 +3,8 @@ package handlers
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/nikhilAgarwal99/goapp/internal/services"
-	"github.com/nikhilAgarwal99/goapp/pkg/response"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/services"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/pkg/response"
 )
 
 /*
@@ -39,7 +39,7 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 	// Service Call
-	res, err := h.authSvc.Signup(&req)
+	res, err := h.authSvc.Signup(c.Request.Context(), &req)
 	if err != nil {
 		if err.Error() == "email already registered" {
 			response.Conflict(c, err.Error())
@@ -60,7 +60,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	res, err := h.authSvc.Login(&req)
+	res, err := h.authSvc.Login(c.Request.Context(), &req)
 	if err != nil {
 		response.Unauthorized(c, err.Error())
 		return
@@ -75,7 +75,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	userID := mustUserID(c)
 
-	profile, err := h.authSvc.GetProfile(userID)
+	profile, err := h.authSvc.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		response.NotFound(c, err.Error())
 		return
@@ -96,7 +96,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	profile, err := h.authSvc.UpdateProfile(userID, &req)
+	profile, err := h.authSvc.UpdateProfile(c.Request.Context(), userID, &req)
 	if err != nil {
 		response.InternalServerError(c, err.Error())
 		return
@@ -109,7 +109,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 func (h *AuthHandler) DeleteAccount(c *gin.Context) {
 	userID := mustUserID(c)
 
-	if err := h.authSvc.DeleteAccount(userID); err != nil {
+	if err := h.authSvc.DeleteAccount(c.Request.Context(), userID); err != nil {
 		response.InternalServerError(c, err.Error())
 		return
 	}

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/nikhilAgarwal99/goapp/internal/cache"
-	"github.com/nikhilAgarwal99/goapp/internal/utils"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/cache"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
 )
 
 const otpTTL = 15 * time.Minute
