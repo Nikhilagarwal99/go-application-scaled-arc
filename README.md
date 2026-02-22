@@ -1,157 +1,218 @@
-# Go Production Backend — Gin + GORM + PostgreSQL + Redis
+# Go Production Backend
 
-A production-ready REST API with authentication, email verification (OTP via Mailjet), and Redis-backed OTP storage.
+A production-ready REST API built with Go, Gin, GORM, PostgreSQL, and Redis.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Gin |
+| ORM | GORM |
+| Database | PostgreSQL (Master/Slave) |
+| Cache / OTP | Redis |
+| Auth | JWT |
+| Email | Mailjet |
+| Logging | Zap |
+| Migrations | golang-migrate |
+| Hot Reload | Air |
+| Containerization | Docker + Docker Compose |
 
 ---
 
 ## Project Structure
-
 ```
 .
 ├── cmd/
-│   └── main.go              # Entrypoint — config, DB/Redis, server, graceful shutdown
+│   ├── server/
+│   │   ├── main.go          # Entrypoint — boots server, graceful shutdown
+│   │   └── router.go        # Route registration & dependency wiring
+│   └── migrate/
+│       └── main.go          # Standalone migration binary
 ├── internal/
-│   ├── cache/               # Redis client (OTP storage, session cache)
+│   ├── cache/               # Redis client
 │   ├── config/              # Environment config loader
-│   ├── database/            # PostgreSQL connection & auto-migration
-│   ├── handlers/            # HTTP handlers (auth, user profile)
-│   ├── middleware/          # JWT auth, CORS, logging
-│   ├── models/              # GORM models (User, etc.)
-│   ├── repository/          # Data access (user_repository, otp_repository)
-│   ├── server/              # Router & dependency wiring
-│   ├── services/            # Business logic (auth, email verification)
-│   └── utils/               # JWT, OTP, Mailjet email
+│   ├── database/            # PostgreSQL connection, migrations
+│   │   └── migrations/      # SQL migration files
+│   ├── handlers/            # HTTP handlers — thin, delegate to services
+│   ├── logger/              # Zap structured logger
+│   ├── middleware/          # JWT auth, CORS, RequestID, Logger, Transaction
+│   ├── models/              # GORM models
+│   ├── repository/          # Data access layer — DB and Redis
+│   ├── server/              # Router setup
+│   ├── services/            # Business logic
+│   └── utils/               # JWT, OTP, Mailjet
 ├── pkg/
-│   └── response/            # Standard JSON response helpers
-├── .env.example
-├── .air.toml                # Hot-reload config (Air)
-├── docker-compose.yml       # Postgres, Redis, Redis Commander, app
+│   ├── apperrors/           # Centralized typed errors
+│   └── response/            # Standard JSON response envelope
+├── .air.toml                # Air hot-reload config
+├── .env.example             # Environment variable template
+├── docker-compose.yml       # Full stack — app, postgres, redis
 ├── Dockerfile               # Production build
-├── Dockerfile.dev           # Dev image with Air
-└── go.mod
+└── Dockerfile.dev           # Development build with Air
 ```
 
 ---
 
 ## Quick Start
 
-### 1. Clone & install dependencies
-
+### 1. Clone and install dependencies
 ```bash
+git clone https://github.com/Nikhilagarwal99/go-application-scaled-arc.git
+cd go-application-scaled-arc
 go mod tidy
 ```
 
-### 2. Copy and configure environment
-
+### 2. Configure environment
 ```bash
 cp .env.example .env
+# edit .env and fill in your values
 ```
 
-Edit `.env`: set `DB_PASSWORD`, and optionally Mailjet keys for email verification. When using Docker Compose for Postgres/Redis, use:
-
-- `DB_HOST=localhost` (or `postgres` when running app inside Docker)
-- `DB_PORT=7000` (host port mapped from Postgres in docker-compose)
-- `REDIS_ADDR=localhost:7001` (or `redis:6379` when app is in Docker)
-
-### 3. Start dependencies (Postgres + Redis) with Docker
-
+### 3. Start infrastructure
 ```bash
-docker-compose up -d postgres redis
+make up-infra    # starts postgres, redis, redis-commander
 ```
 
-Optional: start Redis Commander for debugging Redis:
-
+### 4. Run migrations
 ```bash
-docker-compose up -d redis-commander
-# UI at http://localhost:7002
+make migrate-up
 ```
 
-### 4. Run the server
-
-**Locally (with Postgres/Redis in Docker):**
-
+### 5. Start the server
 ```bash
-go run ./cmd/main.go
+make dev         # with Air hot-reload
+# or
+make run         # without hot-reload
 ```
 
-Server runs on `SERVER_PORT` (default `7003` from `.env.example`). Health check: `GET http://localhost:7003/health`
+---
 
-**Full stack in Docker (app + Postgres + Redis):**
-
+## Docker (Full Stack)
 ```bash
-docker-compose up -d
+make up          # start everything
+make logs-app    # watch app logs
+make down        # stop everything
+make clean       # stop + wipe volumes (WARNING: deletes all data)
 ```
 
-App is exposed on port `7003`; ensure `.env` has `DB_HOST=postgres` and `REDIS_ADDR=redis:6379` (docker-compose overrides these when running the app service).
+---
 
-**Development with hot-reload (Air):**
+## Makefile Commands
 
-```bash
-air
-```
-
-Uses `.air.toml` to rebuild and restart on Go file changes.
+| Command | Description |
+|---|---|
+| `make run` | Run server locally |
+| `make dev` | Run with Air hot-reload |
+| `make build` | Compile server + migrate binaries |
+| `make tidy` | Clean up go modules |
+| `make migrate-up` | Run all pending migrations |
+| `make migrate-down` | Roll back all migrations |
+| `make up` | Start all Docker services |
+| `make up-infra` | Start postgres + redis only |
+| `make up-app` | Start app container only |
+| `make down` | Stop all containers |
+| `make clean` | Stop containers + wipe volumes |
+| `make logs` | Tail all container logs |
+| `make logs-app` | Tail app container logs |
+| `make ps` | Show running containers |
+| `make install-air` | Install Air hot-reload tool |
 
 ---
 
 ## API Reference
 
-Responses use a consistent envelope:
+All responses follow this envelope:
+```json
+// success
+{ "success": true, "message": "...", "data": { } }
 
-- Success: `{ "success": true, "message": "...", "data": { ... } }`
-- Error: `{ "success": false, "error": "..." }` (with appropriate HTTP status)
+// error
+{ "success": false, "code": "ERROR_CODE", "message": "..." }
+```
 
 ### Health
 
-| Method | Path     | Description   |
-|--------|----------|---------------|
-| GET    | `/health` | Service health |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/health` | — | Checks postgres + redis connectivity |
 
-### Auth (public)
+### Auth
 
-| Method | Path                          | Body                           | Description              |
-|--------|--------------------------------|--------------------------------|--------------------------|
-| POST   | `/api/v1/auth/signup`          | `{ "name", "email", "password" }` | Create account           |
-| POST   | `/api/v1/auth/login`           | `{ "email", "password" }`      | Login → JWT token        |
-| POST   | `/api/v1/auth/send-verify-email-otp` | `{ "email" }`            | Send OTP to email (Mailjet) |
-| POST   | `/api/v1/auth/verify-email`    | `{ "email", "otp" }`           | Verify email with OTP    |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/auth/signup` | — | Create account |
+| POST | `/api/v1/auth/login` | — | Login → JWT |
+| POST | `/api/v1/auth/send-verify-email-otp` | — | Send OTP to email |
+| POST | `/api/v1/auth/verify-email` | — | Verify email with OTP |
 
-### Users (protected)
+### Users
 
-Require header: `Authorization: Bearer <token>`.
+Require header: `Authorization: Bearer <token>`
 
-| Method | Path               | Body        | Description         |
-|--------|--------------------|-------------|---------------------|
-| GET    | `/api/v1/users/`   | —           | Get own profile     |
-| PUT    | `/api/v1/users/`   | `{ "name" }`| Update profile      |
-| DELETE | `/api/v1/users/`   | —           | Soft-delete account |
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/v1/users/` | ✓ | Get own profile |
+| PUT | `/api/v1/users/` | ✓ | Update name |
+| DELETE | `/api/v1/users/` | ✓ | Soft-delete account |
 
 ---
 
 ## Environment Variables
 
-| Variable              | Description                    | Default / Example     |
-|-----------------------|--------------------------------|------------------------|
-| `APP_ENV`             | `development` / `production`   | `development`         |
-| `SERVER_PORT`         | HTTP server port               | `7003`                 |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE` | PostgreSQL | — |
-| `JWT_SECRET`          | Secret for signing JWTs        | —                      |
-| `JWT_EXPIRY_HOURS`    | Token expiry in hours          | `24`                   |
-| `REDIS_ADDR`          | Redis address                  | `localhost:6379`       |
-| `REDIS_PASSWORD`      | Redis password (if any)        | —                      |
-| `REDIS_DB`            | Redis DB index                 | `0`                    |
-| `MAILJET_API_KEY`, `MAILJET_API_SECRET` | Mailjet API credentials | — |
-| `MAILJET_SENDER_EMAIL`, `MAILJET_SENDER_NAME` | Sender for verification emails | — |
+| Variable | Description | Example |
+|---|---|---|
+| `APP_ENV` | `development` or `production` | `development` |
+| `SERVER_PORT` | HTTP port | `7003` |
+| `DB_HOST` | Postgres host | `localhost` |
+| `DB_PORT` | Postgres port (host mapped) | `7000` |
+| `DB_USER` | Postgres user | `postgres` |
+| `DB_PASSWORD` | Postgres password | — |
+| `DB_NAME` | Postgres database | `goapp_db` |
+| `DB_SSLMODE` | SSL mode | `disable` |
+| `DB_SLAVE_HOST` | Slave host (falls back to master) | `localhost` |
+| `DB_SLAVE_PORT` | Slave port | `7000` |
+| `JWT_SECRET` | JWT signing secret | — |
+| `JWT_EXPIRY_HOURS` | Token expiry | `24` |
+| `REDIS_ADDR` | Redis address | `localhost:7001` |
+| `REDIS_PASSWORD` | Redis password | — |
+| `REDIS_DB` | Redis DB index | `0` |
+| `MAILJET_API_KEY` | Mailjet API key | — |
+| `MAILJET_API_SECRET` | Mailjet API secret | — |
+| `MAILJET_SENDER_EMAIL` | Sender email | — |
+| `MAILJET_SENDER_NAME` | Sender name | — |
 
 ---
 
+## Architecture
+```
+Request
+  ↓
+gin.Recovery()          → catches panics
+CORS()                  → sets headers
+RequestID()             → assigns unique trace ID
+RequestLogger()         → structured zap logging
+Auth()                  → validates JWT (protected routes)
+Transaction()           → BEGIN tx (write routes only)
+  ↓
+Handler                 → validates request body
+  ↓
+Service                 → business logic + typed AppErrors
+  ↓
+Repository              → DB (master/slave aware + tx aware)
+  ↓
+Response                → standard envelope + automatic error mapping
+```
+
 ## Design Decisions
 
-- **Repository pattern** — DB and Redis access behind interfaces for testability.
-- **Service layer** — business logic in services; handlers stay thin.
-- **UUIDs** as primary keys — no sequential ID exposure.
-- **Soft deletes** — GORM `DeletedAt`; user records are not hard-deleted.
-- **bcrypt** for passwords — password field excluded from JSON.
-- **Email verification** — OTP stored in Redis, sent via Mailjet; verified flag on user.
-- **Graceful shutdown** — SIGINT/SIGTERM handled; in-flight requests complete before exit.
-- **Connection tuning** — PostgreSQL pool and timeouts configured for moderate load.
+- **Repository pattern** — all DB/Redis access behind interfaces, easy to mock in tests
+- **Service layer** — business logic isolated from HTTP concerns
+- **Typed errors** — `AppError` carries HTTP status + app error code, no string matching
+- **Automatic transactions** — middleware owns BEGIN/COMMIT/ROLLBACK, handlers never touch it
+- **Master/Slave splitting** — writes go to master, reads go to slave via dbresolver
+- **UUIDs** as primary keys — no sequential ID enumeration
+- **Soft deletes** — records never hard deleted, `deleted_at` used
+- **Request ID** — every log line carries a trace ID for end-to-end debugging
+- **Graceful shutdown** — in-flight requests finish before process exits

@@ -22,7 +22,8 @@ func NewRouter(db *gorm.DB, redis *cache.Client, cfg *config.Config) *gin.Engine
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.CORS())
-	router.Use(gin.Logger()) // replace with a structured logger (e.g. zap) for production
+	router.Use(middleware.RequestID())
+	router.Use(middleware.RequestLogger())
 
 	// --- Dependency wiring ---
 	mailService := utils.NewMailService(cfg)

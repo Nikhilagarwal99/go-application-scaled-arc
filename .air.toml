@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -o tmp/app ./cmd/server/..."
-  entrypoint = "tmp/app"        # replaces deprecated full_bin and bin
+  cmd = "go build -buildvcs=false -o ./tmp/app ./cmd/server/..."
+  entrypoint = "tmp/app"
   include_ext = ["go"]
   exclude_dir = ["tmp", "vendor"]

@@ -12,12 +12,19 @@ import (
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/cache"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/config"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/database"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/logger"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/server"
+	"go.uber.org/zap"
 )
 
 func main() {
+
 	// 1. Load configuration
 	cfg := config.Load()
+
+	// initialise logger before anything else
+	logger.Init(cfg.AppEnv)
+	defer logger.Sync() // flush on shutdown
 
 	// 2. Connect to database and run migrations
 	redis := cache.New(cfg)
@@ -38,9 +45,9 @@ func main() {
 
 	// 5. Start serving in a goroutine so we can listen for shutdown signals
 	go func() {
-		log.Printf("🚀 Server running on port %s [%s]", cfg.ServerPort, cfg.AppEnv)
+		logger.Info("starting server", zap.String("port", cfg.ServerPort))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			logger.Error("failed to start server", zap.Error(err))
 		}
 	}()
 
