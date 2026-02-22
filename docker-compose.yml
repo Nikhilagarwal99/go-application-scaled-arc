@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: goapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_password
+      POSTGRES_DB: goapp_db
+    ports:
+      - "7000:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - goapp-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: goapp-redis
+    restart: unless-stopped
+    ports:
+      - "7001:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - goapp-network
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: goapp-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "7002:8081"
+    depends_on:
+      - redis
+    networks:
+      - goapp-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: goapp-app
+    ports:
+      - "7003:7003"
+    depends_on:
+      - redis
+      - postgres
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      REDIS_ADDR: redis:6379
+    volumes:
+      - .:/app
+    networks:
+      - goapp-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  goapp-network:
+    driver: bridge
