@@ -18,11 +18,6 @@ gin.ContextIn the handler only — never pass it deeper */
 type AuthHandler struct {
 	authSvc services.AuthService
 }
-type DefaultResponse struct {
-	Success bool   `json:"success"`
-	Data    any    `json:"data,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
 
 func NewAuthHandler(authSvc services.AuthService) *AuthHandler {
 	return &AuthHandler{authSvc: authSvc}

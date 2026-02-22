@@ -12,7 +12,7 @@ type User struct {
 	Name          string         `gorm:"type:varchar(100);not null"            json:"name"`
 	Email         string         `gorm:"type:varchar(150);uniqueIndex;not null" json:"email"`
 	Password      string         `gorm:"type:varchar(255);not null"            json:"-"` // never serialised
-	EmailVerified bool           `gorm:"type:boolean;default:false" json:"-"`
+	EmailVerified bool           `gorm:"type:boolean;default:false" json:"email_verified"`
 	CreatedAt     time.Time      `                                             json:"created_at"`
 	UpdatedAt     time.Time      `                                             json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index"                                 json:"-"` // soft-delete

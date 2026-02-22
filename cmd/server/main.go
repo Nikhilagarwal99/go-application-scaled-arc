@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,23 +17,24 @@ import (
 )
 
 func main() {
-
-	// 1. Load configuration
+	// 1. Load config
 	cfg := config.Load()
 
-	// initialise logger before anything else
+	// 2. Logger MUST be first — everything after can use it safely
 	logger.Init(cfg.AppEnv)
-	defer logger.Sync() // flush on shutdown
+	defer logger.Sync()
 
-	// 2. Connect to database and run migrations
+	// 3. Connect to Redis
 	redis := cache.New(cfg)
+
+	// 4. Connect to PostgreSQL + run migrations
 	db := database.Connect(cfg)
 	database.Migrate(db)
 
-	// 3. Build the HTTP router
+	// 5. Boot the router with all dependencies
 	router := server.NewRouter(db, redis, cfg)
 
-	// 4. Create the HTTP server
+	// 6. Configure HTTP server
 	srv := &http.Server{
 		Addr:         ":" + cfg.ServerPort,
 		Handler:      router,
@@ -43,25 +43,27 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// 5. Start serving in a goroutine so we can listen for shutdown signals
+	// 7. Start in background goroutine
 	go func() {
-		logger.Info("starting server", zap.String("port", cfg.ServerPort))
+		logger.Info("server started", zap.String("port", cfg.ServerPort), zap.String("env", cfg.AppEnv))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Error("failed to start server", zap.Error(err))
+			logger.Fatal("server failed to start", zap.Error(err))
 		}
 	}()
 
-	// 6. Graceful shutdown — wait for SIGINT / SIGTERM
+	// 8. Block until SIGINT or SIGTERM
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("shutting down server gracefully")
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("forced shutdown: %v", err)
+		logger.Fatal("forced shutdown", zap.Error(err))
 	}
-	log.Println("Server exited gracefully")
+
+	logger.Info("server exited cleanly")
 }
