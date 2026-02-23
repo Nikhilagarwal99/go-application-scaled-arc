@@ -68,7 +68,15 @@ func main() {
 	mux.HandleFunc(tasks.TypeVerifyEmail, emailProcessor.ProcessVerifyEmail)
 	mux.HandleFunc(tasks.TypeWelcomeEmail, emailProcessor.ProcessWelcomeEmail)
 
-	// 7. Start worker in background goroutine
+	// Extra tasks Scheduled Cron Jobs
+	mux.HandleFunc(tasks.TypeCleanupExpiredOTPs, emailProcessor.ProcessCleanupExpiredOTPs)
+	mux.HandleFunc(tasks.TypeWeeklyDigest, emailProcessor.ProcessWeeklyDigest)
+	mux.HandleFunc(tasks.TypeDailyHealthReport, emailProcessor.ProcessDailyHealthReport)
+
+	// ── Scheduler — enqueues cron jobs automatically ─────────────────────────
+	scheduler := tasks.NewScheduler(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+
+	// 7. -----Start both worker and scheduler ─────────────────────────────────────
 	go func() {
 		logger.Info("worker started",
 			zap.String("queues", "critical, default"),
@@ -79,6 +87,13 @@ func main() {
 		}
 	}()
 
+	go func() {
+		logger.Info("scheduler started")
+		if err := scheduler.Run(); err != nil {
+			log.Fatalf("scheduler failed to start: %v", err)
+		}
+	}()
+
 	// 8. Block until SIGINT or SIGTERM
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -86,7 +101,8 @@ func main() {
 
 	// 9. Graceful shutdown
 	// Waits for in-progress tasks to finish before stopping
-	logger.Info("shutting down worker gracefully")
+	logger.Info("shutting down worker and scheduler gracefully")
+	scheduler.Shutdown()
 	srv.Shutdown()
 	logger.Info("worker exited cleanly")
 }

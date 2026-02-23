@@ -14,8 +14,11 @@ import (
 // Task type constants — unique string identifier for each task type.
 // Think of these like queue names in BullMQ.
 const (
-	TypeVerifyEmail  = "email:verify"
-	TypeWelcomeEmail = "email:welcome"
+	TypeVerifyEmail        = "email:verify"
+	TypeWelcomeEmail       = "email:welcome"
+	TypeCleanupExpiredOTPs = "system:cleanup_otps"
+	TypeWeeklyDigest       = "email:weekly_digest"
+	TypeDailyHealthReport  = "system:health_report"
 )
 
 // ---- Payloads ---------------------------------------------------------------
@@ -86,5 +89,27 @@ func (p *EmailProcessor) ProcessWelcomeEmail(ctx context.Context, t *asynq.Task)
 	// TODO: implement welcome email in mailjet.go
 	// p.mailService.SendWelcomeEmail(payload.Email, payload.Name)
 
+	return nil
+}
+
+// ProcessCleanupExpiredOTPs runs every hour.
+// Redis TTL already handles OTP expiry — this is for any
+func (p *EmailProcessor) ProcessCleanupExpiredOTPs(ctx context.Context, t *asynq.Task) error {
+	logger.Info("running OTP cleanup job")
+	// add cleanup logic here
+	return nil
+}
+
+// ProcessWeeklyDigest sends a weekly summary email to active users.
+func (p *EmailProcessor) ProcessWeeklyDigest(ctx context.Context, t *asynq.Task) error {
+	logger.Info("running weekly digest job")
+	// fetch active users → send digest email
+	return nil
+}
+
+// ProcessDailyHealthReport logs a daily system health summary.
+func (p *EmailProcessor) ProcessDailyHealthReport(ctx context.Context, t *asynq.Task) error {
+	logger.Info("running daily health report job")
+	// check DB connections, queue depths, error rates
 	return nil
 }
