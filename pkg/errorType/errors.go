@@ -145,4 +145,9 @@ var (
 		Message:    "email service is down",
 		HTTPStatus: http.StatusInternalServerError,
 	}
+	ErrFailedToEnqueueTask = AppError{
+		Code:       "FAILED_TO_ENQUEUE_TASK",
+		Message:    "failed to enqueue task",
+		HTTPStatus: http.StatusInternalServerError,
+	}
 )

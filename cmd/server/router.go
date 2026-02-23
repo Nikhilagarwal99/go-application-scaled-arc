@@ -6,6 +6,7 @@ import (
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/config"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/handlers"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/middleware"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/tasks"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
 	"gorm.io/gorm"
 
@@ -29,7 +30,10 @@ func NewRouter(db *gorm.DB, redis *cache.Client, cfg *config.Config) *gin.Engine
 	mailService := utils.NewMailService(cfg)
 	userRepo := repository.NewUserRepository(db)
 	otpRepo := repository.NewOTPRepository(redis)
-	authSvc := services.NewAuthService(userRepo, otpRepo, mailService, cfg.JWTSecret, cfg.JWTExpiryHours)
+	// Task client — connects to same Redis instance
+	taskClient := tasks.NewClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+
+	authSvc := services.NewAuthService(userRepo, otpRepo, mailService, taskClient, cfg.JWTSecret, cfg.JWTExpiryHours)
 	authHandler := handlers.NewAuthHandler(authSvc)
 	healthHandler := handlers.NewHealthHandler(db, redis)
 

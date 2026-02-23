@@ -1,6 +1,6 @@
 # Go Production Backend
 
-A production-ready REST API built with Go, Gin, GORM, PostgreSQL, and Redis.
+A production-ready REST API built with Go, Gin, GORM, PostgreSQL, Redis, and Asynq background workers.
 
 ---
 
@@ -16,6 +16,7 @@ A production-ready REST API built with Go, Gin, GORM, PostgreSQL, and Redis.
 | Email            | Mailjet                   |
 | Logging          | Zap                       |
 | Migrations       | golang-migrate            |
+| Background Jobs  | Asynq (Redis-backed)      |
 | Hot Reload       | Air                       |
 | Containerization | Docker + Docker Compose   |
 
@@ -28,6 +29,8 @@ A production-ready REST API built with Go, Gin, GORM, PostgreSQL, and Redis.
 │   ├── server/
 │   │   ├── main.go               # Entrypoint — boots logger, DB, Redis, HTTP server
 │   │   └── router.go             # Route registration + dependency wiring
+│   ├── worker/
+│   │   └── main.go               # Worker entrypoint — processes background tasks
 │   └── migrate/
 │       └── main.go               # Standalone migration binary
 ├── internal/
@@ -58,6 +61,9 @@ A production-ready REST API built with Go, Gin, GORM, PostgreSQL, and Redis.
 │   │   └── otp_repository.go     # OTP Redis access
 │   ├── services/
 │   │   └── auth_service.go       # Business logic — signup, login, OTP, verify
+│   ├── tasks/
+│   │   ├── client.go             # Enqueue jobs from services
+│   │   └── email_task.go         # Task definitions + processors
 │   └── utils/
 │       ├── jwt.go                # JWT generate + validate
 │       ├── otp.go                # Crypto random OTP generator
@@ -69,9 +75,10 @@ A production-ready REST API built with Go, Gin, GORM, PostgreSQL, and Redis.
 │       └── response.go           # Standard JSON envelope + error mapping
 ├── .air.toml                     # Air hot-reload config
 ├── .env.example                  # Environment variable template
-├── docker-compose.yml            # Full stack — postgres, redis, app
-├── Dockerfile                    # Production multi-stage build
-└── Dockerfile.dev                # Development build with Air
+├── docker-compose.yml            # Full stack — postgres, redis, app, worker
+├── Dockerfile                    # Production HTTP server build
+├── Dockerfile.dev                # Development build with Air
+└── Dockerfile.worker             # Production worker build
 ```
 
 ---
@@ -101,21 +108,21 @@ make up-infra    # starts postgres + redis + redis-commander
 make migrate-up
 ```
 
-### 5. Start the server
+### 5. Start server + worker
 ```bash
-make dev    # hot-reload via Air
-# or
-make run    # without hot-reload
+make dev         # HTTP server with hot-reload
+make up-worker   # worker in Docker (separate terminal)
 ```
 
 ---
 
 ## Docker (Full Stack)
 ```bash
-make up          # start everything
-make logs-app    # watch app logs
-make down        # stop everything
-make clean       # stop + wipe volumes (WARNING: deletes all data)
+make up            # start everything including worker
+make logs-app      # watch HTTP server logs
+make logs-worker   # watch worker logs
+make down          # stop everything
+make clean         # stop + wipe volumes (WARNING: deletes all data)
 ```
 
 ---
@@ -133,23 +140,26 @@ make clean       # stop + wipe volumes (WARNING: deletes all data)
 
 ## Makefile Commands
 
-| Command             | Description                        |
-|---------------------|------------------------------------|
-| `make run`          | Run server locally                 |
-| `make dev`          | Run with Air hot-reload            |
-| `make build`        | Compile server + migrate binaries  |
-| `make tidy`         | Clean up go modules                |
-| `make migrate-up`   | Run all pending migrations         |
-| `make migrate-down` | Roll back all migrations           |
-| `make up`           | Start all Docker services          |
-| `make up-infra`     | Start postgres + redis only        |
-| `make up-app`       | Start app container only           |
-| `make down`         | Stop all containers                |
-| `make clean`        | Stop containers + wipe volumes     |
-| `make logs`         | Tail all container logs            |
-| `make logs-app`     | Tail app container logs            |
-| `make ps`           | Show running containers            |
-| `make install-air`  | Install Air hot-reload tool        |
+| Command              | Description                              |
+|----------------------|------------------------------------------|
+| `make run`           | Run server locally                       |
+| `make dev`           | Run with Air hot-reload                  |
+| `make build`         | Compile server + worker + migrate        |
+| `make tidy`          | Clean up go modules                      |
+| `make migrate-up`    | Run all pending migrations               |
+| `make migrate-down`  | Roll back all migrations                 |
+| `make up`            | Start all Docker services                |
+| `make up-infra`      | Start postgres + redis only              |
+| `make up-app`        | Start app container only                 |
+| `make up-worker`     | Start worker container only              |
+| `make down`          | Stop all containers                      |
+| `make clean`         | Stop containers + wipe volumes           |
+| `make logs`          | Tail all container logs                  |
+| `make logs-app`      | Tail app container logs                  |
+| `make logs-worker`   | Tail worker container logs               |
+| `make ps`            | Show running containers                  |
+| `make scale-worker N=3` | Scale worker to N instances          |
+| `make install-air`   | Install Air hot-reload tool              |
 
 ---
 
@@ -172,12 +182,12 @@ All responses follow this envelope:
 
 ### Auth (Public)
 
-| Method | Path                                  | Description           |
-|--------|---------------------------------------|-----------------------|
-| POST   | `/api/v1/auth/signup`                 | Create account        |
-| POST   | `/api/v1/auth/login`                  | Login → JWT token     |
-| POST   | `/api/v1/auth/send-verify-email-otp`  | Send OTP to email     |
-| POST   | `/api/v1/auth/verify-email`           | Verify email with OTP |
+| Method | Path                                 | Description           |
+|--------|--------------------------------------|-----------------------|
+| POST   | `/api/v1/auth/signup`                | Create account        |
+| POST   | `/api/v1/auth/login`                 | Login → JWT token     |
+| POST   | `/api/v1/auth/send-verify-email-otp` | Send OTP to email     |
+| POST   | `/api/v1/auth/verify-email`          | Verify email with OTP |
 
 ### Users (Protected)
 
@@ -188,6 +198,53 @@ Require header: `Authorization: Bearer <token>`
 | GET    | `/api/v1/users/` | Get own profile     |
 | PUT    | `/api/v1/users/` | Update name         |
 | DELETE | `/api/v1/users/` | Soft-delete account |
+
+---
+
+## Background Jobs
+
+Email sending is fully decoupled from HTTP requests using Asynq backed by Redis.
+
+### How it works
+```
+User requests OTP
+  ↓
+Service saves OTP to Redis
+  ↓
+Service enqueues email:verify task  ← returns in <1ms
+  ↓
+User gets 200 immediately
+  ↓                         (background)
+Worker picks up task from Redis
+  ↓
+Calls Mailjet
+  ↓
+Fails? → retries 3x with exponential backoff
+All retries fail? → moves to dead letter queue
+```
+
+### Task types
+
+| Task            | Queue    | Trigger       | Retries |
+|-----------------|----------|---------------|---------|
+| `email:verify`  | critical | Request OTP   | 3       |
+| `email:welcome` | default  | User signup   | 3       |
+
+### Queue priorities
+```
+critical → processed 3x more than default
+default  → processed when critical queue is clear
+```
+
+This ensures OTP emails (user is actively waiting) always take priority over welcome emails (background, no urgency).
+
+### Scaling workers during traffic spikes
+```bash
+make scale-worker N=5   # spin up 5 workers to drain queue
+make scale-worker N=1   # scale back down when queue clears
+```
+
+Workers scale independently from HTTP servers — no app restart needed.
 
 ---
 
@@ -233,8 +290,16 @@ Handler                 → validates request body (ShouldBindJSON)
 Service                 → business logic + typed AppErrors
   ↓
 Repository              → DB via master/slave + transaction aware
+Tasks Client            → enqueues background jobs to Redis
   ↓
 Response                → standard envelope + automatic error mapping
+
+
+Redis Queue (Asynq)
+  ↓
+Worker
+  ↓
+Task Processor          → email sending, retries, dead letter
 ```
 
 ---
@@ -261,7 +326,9 @@ Response                → standard envelope + automatic error mapping
 - **Automatic transactions** — middleware owns BEGIN/COMMIT/ROLLBACK, services never touch it
 - **Master/Slave splitting** — writes to master, reads to slave via GORM dbresolver
 - **Request ID** — every log line carries a trace ID for end-to-end debugging
+- **Background workers** — email sending fully decoupled from HTTP via Asynq + Redis
+- **Worker scaling** — workers scale independently from HTTP servers
 - **UUIDs** as primary keys — no sequential ID enumeration
 - **Soft deletes** — records never hard deleted, `deleted_at` used
-- **Graceful shutdown** — in-flight requests finish before process exits
+- **Graceful shutdown** — both HTTP server and worker drain in-flight work before exit
 - **Connection pooling** — max open/idle conns + lifetime configured for production load

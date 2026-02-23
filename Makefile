@@ -1,19 +1,20 @@
 .PHONY: run dev build migrate-up migrate-down \
-        up down up-infra up-app logs ps clean tidy
+        up down up-infra up-app up-worker logs ps clean tidy
 
-# ── Local (no Docker for app) ─────────────────────────────────────────────────
+# ── Local ─────────────────────────────────────────────────────────────────────
 
-## run: run the server locally (needs postgres + redis running)
+## run: run the HTTP server locally
 run:
 	go run ./cmd/server/...
 
-## dev: run with Air hot-reload locally (needs Air installed)
+## dev: run with Air hot-reload locally
 dev:
 	air
 
-## build: compile both binaries into bin/
+## build: compile server + worker + migrate binaries
 build:
 	go build -o bin/server  ./cmd/server/...
+	go build -o bin/worker  ./cmd/worker/...
 	go build -o bin/migrate ./cmd/migrate/...
 
 ## tidy: clean up go modules
@@ -22,7 +23,6 @@ tidy:
 
 # ── Migrations ────────────────────────────────────────────────────────────────
 
-## migrate-up: run all pending migrations
 ## migrate-up: run all pending migrations (uses Docker-mapped ports)
 migrate-up:
 	DB_HOST=localhost DB_PORT=7000 REDIS_ADDR=localhost:7001 go run ./cmd/migrate/... up
@@ -30,20 +30,24 @@ migrate-up:
 ## migrate-down: roll back all migrations
 migrate-down:
 	DB_HOST=localhost DB_PORT=7000 REDIS_ADDR=localhost:7001 go run ./cmd/migrate/... down
-	
+
 # ── Docker ────────────────────────────────────────────────────────────────────
 
-## up: start everything (postgres, redis, redis-commander, app)
+## up: start everything (postgres, redis, redis-commander, app, worker)
 up:
 	docker-compose up -d
 
-## up-infra: start only postgres + redis + redis-commander (run app locally)
+## up-infra: start only postgres + redis + redis-commander
 up-infra:
 	docker-compose up -d postgres redis redis-commander
 
-## up-app: start only the app container
+## up-app: start only the HTTP app container
 up-app:
 	docker-compose up -d app
+
+## up-worker: start only the worker container
+up-worker:
+	docker-compose up -d worker
 
 ## down: stop and remove all containers
 down:
@@ -61,9 +65,17 @@ logs:
 logs-app:
 	docker-compose logs -f app
 
+## logs-worker: tail logs from worker container only
+logs-worker:
+	docker-compose logs -f worker
+
 ## ps: show running containers
 ps:
 	docker-compose ps
+
+## scale-worker: scale worker to N instances e.g. make scale-worker N=3
+scale-worker:
+	docker-compose up -d --scale worker=$(N) --no-recreate
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

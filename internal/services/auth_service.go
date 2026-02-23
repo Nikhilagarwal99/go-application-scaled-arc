@@ -5,10 +5,13 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/logger"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/models"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/repository"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/tasks"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/pkg/errorType"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -69,6 +72,7 @@ type authService struct {
 	repo           repository.UserRepository
 	otpService     repository.OTPRepository
 	mailService    *utils.MailService
+	taskClient     *tasks.Client
 	jwtSecret      string
 	jwtExpiryHours int
 }
@@ -77,6 +81,7 @@ func NewAuthService(
 	repo repository.UserRepository,
 	otpService repository.OTPRepository,
 	mailService *utils.MailService,
+	taskClient *tasks.Client,
 	jwtSecret string,
 	jwtExpiryHours int,
 ) AuthService {
@@ -84,6 +89,7 @@ func NewAuthService(
 		repo:           repo,
 		otpService:     otpService,
 		mailService:    mailService,
+		taskClient:     taskClient,
 		jwtSecret:      jwtSecret,
 		jwtExpiryHours: jwtExpiryHours,
 	}
@@ -109,6 +115,11 @@ func (s *authService) Signup(ctx context.Context, req *SignupRequest) (*AuthResp
 
 	if err := s.repo.Create(ctx, user); err != nil {
 		return nil, errorType.ErrFailedToCreateUser
+	}
+
+	// Enqueue welcome email — fire and forget, don't fail signup if this fails
+	if err := s.taskClient.EnqueueWelcomeEmail(user.Email, user.Name); err != nil {
+		logger.Warn("failed to enqueue welcome email — signup still succeeded", zap.String("email", user.Email), zap.Error(err))
 	}
 
 	return s.buildAuthResponse(user)
@@ -181,10 +192,14 @@ func (s *authService) SendVerifyEmail(ctx context.Context, email string) error {
 		return errorType.ErrFailedToStoreOTP
 	}
 
-	if err := s.mailService.SendVerifyEmail(email, otp); err != nil {
-		return errorType.ErrEmailServiceDown
+	// Enqueue email task — returns instantly, worker handles sending
+	// If this fails the OTP is already saved — user can retry sending
+	if err := s.taskClient.EnqueueVerifyEmail(user.Email, otp); err != nil {
+		logger.Error("failed to enqueue verify email task", zap.String("email", user.Email), zap.Error(err))
+		return errorType.ErrFailedToEnqueueTask
 	}
 
+	logger.Info("verify email task enqueued", zap.String("email", user.Email))
 	return nil
 }
 
