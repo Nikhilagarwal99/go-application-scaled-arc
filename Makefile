@@ -57,6 +57,10 @@ up-app:
 up-worker:
 	docker-compose up -d worker
 
+## up-worker-dashboard: start only the worker  dashboard only
+up-worker-dashboard:
+	docker-compose up -d worker-dashboard
+
 ## down: stop and remove all containers
 down:
 	docker-compose down

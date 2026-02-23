@@ -24,11 +24,11 @@ type UserProfile struct {
 }
 
 type UpdateProfileRequest struct {
-	Name        string `json:"name" binding:"required,min=2,max=100"`
-	ImageUrl    string `json:"image_url"`
-	DateOfBirth string `json:"date_of_birth"`
-	Address     string `json:"address"`
-	PhoneNumber string `json:"phone_number"`
+	Name        string    `json:"name" binding:"required,min=2,max=100"`
+	ImageUrl    string    `json:"image_url"`
+	DateOfBirth time.Time `json:"date_of_birth"`
+	Address     string    `json:"address"`
+	PhoneNumber string    `json:"phone_number"`
 }
 
 type UserService interface {
@@ -64,6 +64,8 @@ func (s *userService) UpdateProfile(ctx context.Context, id uuid.UUID, req *Upda
 	if err != nil {
 		return nil, errorType.ErrUserNotFound
 	}
+
+	//if image binary file is there then upload to cloud storage using go routine and update image url
 
 	user.Name = req.Name
 	if err := s.userRepo.Update(ctx, user); err != nil {
