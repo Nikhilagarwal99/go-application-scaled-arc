@@ -23,9 +23,6 @@ func NewAuthHandler(authSvc services.AuthService) *AuthHandler {
 	return &AuthHandler{authSvc: authSvc}
 }
 
-// Signup godoc
-//
-//	POST /api/v1/auth/signup
 func (h *AuthHandler) Signup(c *gin.Context) {
 	var req services.SignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -42,7 +39,6 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 	response.Created(c, "account created successfully", res)
 }
 
-// POST /api/v1/auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req services.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -57,59 +53,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	response.OK(c, "login successful", res)
-}
-
-// GetProfile godoc
-//
-//	GET /api/v1/users/me
-func (h *AuthHandler) GetProfile(c *gin.Context) {
-	userID := mustUserID(c)
-
-	profile, err := h.authSvc.GetProfile(c.Request.Context(), userID)
-	if err != nil {
-		response.Error(c, err)
-		return
-	}
-
-	response.OK(c, "profile fetched", profile)
-}
-
-// UpdateProfile godoc
-//
-//	PUT /api/v1/users/me
-func (h *AuthHandler) UpdateProfile(c *gin.Context) {
-	userID := mustUserID(c)
-
-	var req services.UpdateProfileRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ValidationError(c, err)
-		return
-	}
-
-	profile, err := h.authSvc.UpdateProfile(c.Request.Context(), userID, &req)
-	if err != nil {
-		response.Error(c, err)
-		return
-	}
-
-	response.OK(c, "profile updated", profile)
-}
-
-// DeleteAccount
-func (h *AuthHandler) DeleteAccount(c *gin.Context) {
-	userID := mustUserID(c)
-
-	if err := h.authSvc.DeleteAccount(c.Request.Context(), userID); err != nil {
-		response.Error(c, err)
-		return
-	}
-
-	response.OK(c, "account deleted", nil)
-}
-
-// mustUserID reads the authenticated user ID set by the JWT middleware.
-func mustUserID(c *gin.Context) uuid.UUID {
-	return c.MustGet("userID").(uuid.UUID)
 }
 
 func (h *AuthHandler) SendVerifyEmail(c *gin.Context) {
@@ -146,4 +89,9 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 	response.OK(c, "Email Verified Successfully", nil)
+}
+
+// mustUserID reads the authenticated user ID set by the JWT middleware.
+func mustUserID(c *gin.Context) uuid.UUID {
+	return c.MustGet("userID").(uuid.UUID)
 }

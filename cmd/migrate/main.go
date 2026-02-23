@@ -17,8 +17,7 @@ import (
 go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 
 # create a new migration
-migrate create -ext sql -dir migrations -seq add_phone_to_users
-
+migrate create -ext sql -dir internal/database/migrations -seq add_phone_to_users
 
 This generates:
 
@@ -37,8 +36,8 @@ func main() {
 	}
 
 	command := os.Args[1]
-	if command != "up" && command != "down" {
-		log.Fatalf("unknown command %q — use 'up' or 'down'", command)
+	if command != "up" && command != "down" && command != "step-down" && command != "version" {
+		log.Fatalf("unknown command %q — use 'up', 'down', 'step-down', 'version'", command)
 	}
 
 	// Load config and connect to DB
@@ -81,6 +80,10 @@ func main() {
 		runUp(m)
 	case "down":
 		runDown(m)
+	case "step-down":
+		runStepDown(m)
+	case "version":
+		runVersion(m)
 	}
 }
 
@@ -116,4 +119,40 @@ func runDown(m *migrate.Migrate) {
 	}
 
 	log.Println("all migrations rolled back")
+}
+
+// runStepDown rolls back exactly ONE migration — not all of them.
+// This is what you use in production when you need to undo the last deploy.
+func runStepDown(m *migrate.Migrate) {
+	if os.Getenv("APP_ENV") == "production" {
+		log.Fatal("migrate step-down is disabled in production — set APP_ENV != production to proceed")
+	}
+
+	log.Println("rolling back one migration...")
+
+	// Steps(-1) means roll back exactly 1 migration
+	// Steps(-2) would roll back 2, and so on
+	if err := m.Steps(-1); err != nil {
+		if errors.Is(err, migrate.ErrNoChange) {
+			log.Println("nothing to roll back — already at zero")
+			return
+		}
+		log.Fatalf("step-down failed: %v", err)
+	}
+
+	version, _, _ := m.Version()
+	log.Printf("rolled back — now at version %d", version)
+}
+
+// runVersion shows the current migration version without changing anything.
+func runVersion(m *migrate.Migrate) {
+	version, dirty, err := m.Version()
+	if err != nil {
+		if errors.Is(err, migrate.ErrNilVersion) {
+			log.Println("version: none (fresh database — no migrations applied)")
+			return
+		}
+		log.Fatalf("failed to get version: %v", err)
+	}
+	log.Printf("version: %d | dirty: %v", version, dirty)
 }

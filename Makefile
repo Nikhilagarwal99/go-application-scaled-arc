@@ -31,6 +31,14 @@ migrate-up:
 migrate-down:
 	DB_HOST=localhost DB_PORT=7000 REDIS_ADDR=localhost:7001 go run ./cmd/migrate/... down
 
+## migrate-step-down: roll back only the last migration
+migrate-step-down:
+	DB_HOST=localhost DB_PORT=7000 REDIS_ADDR=localhost:7001 go run ./cmd/migrate/... step-down
+
+## migrate-version: show current migration version
+migrate-version:
+	DB_HOST=localhost DB_PORT=7000 REDIS_ADDR=localhost:7001 go run ./cmd/migrate/... version
+
 # ── Docker ────────────────────────────────────────────────────────────────────
 
 ## up: start everything (postgres, redis, redis-commander, app, worker)

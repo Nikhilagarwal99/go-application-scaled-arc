@@ -13,6 +13,10 @@ type User struct {
 	Email         string         `gorm:"type:varchar(150);uniqueIndex;not null" json:"email"`
 	Password      string         `gorm:"type:varchar(255);not null"            json:"-"` // never serialised
 	EmailVerified bool           `gorm:"type:boolean;default:false" json:"email_verified"`
+	ImageUrl      string         `gorm:"type:varchar(255)"                      json:"image_url"`
+	DateOfBirth   time.Time      `gorm:"type:date"                             json:"date_of_birth"`
+	Address       string         `gorm:"type:varchar(255)"                      json:"address"`
+	PhoneNumber   string         `gorm:"type:varchar(20)"                      json:"phone_number"`
 	CreatedAt     time.Time      `                                             json:"created_at"`
 	UpdatedAt     time.Time      `                                             json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `gorm:"index"                                 json:"-"` // soft-delete

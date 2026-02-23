@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/uuid"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/logger"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/models"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/repository"
@@ -34,17 +33,6 @@ type AuthResponse struct {
 	User  UserProfile `json:"user"`
 }
 
-type UserProfile struct {
-	ID            uuid.UUID `json:"id"`
-	Name          string    `json:"name"`
-	Email         string    `json:"email"`
-	EmailVerified bool      `json:"email_verified"`
-}
-
-type UpdateProfileRequest struct {
-	Name string `json:"name" binding:"required,min=2,max=100"`
-}
-
 type SendVerifyEmailOtpRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
@@ -59,9 +47,6 @@ type VerifyEmailOtpRequest struct {
 type AuthService interface {
 	Signup(ctx context.Context, req *SignupRequest) (*AuthResponse, error)
 	Login(ctx context.Context, req *LoginRequest) (*AuthResponse, error)
-	GetProfile(ctx context.Context, id uuid.UUID) (*UserProfile, error)
-	UpdateProfile(ctx context.Context, id uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error)
-	DeleteAccount(ctx context.Context, id uuid.UUID) error
 	SendVerifyEmail(ctx context.Context, email string) error
 	VerifyEmail(ctx context.Context, email, otp string) error
 }
@@ -145,34 +130,6 @@ func (s *authService) Login(ctx context.Context, req *LoginRequest) (*AuthRespon
 	return s.buildAuthResponse(user)
 }
 
-func (s *authService) GetProfile(ctx context.Context, id uuid.UUID) (*UserProfile, error) {
-	user, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return nil, errorType.ErrUserNotFound
-	}
-	return toProfile(user), nil
-}
-
-func (s *authService) UpdateProfile(ctx context.Context, id uuid.UUID, req *UpdateProfileRequest) (*UserProfile, error) {
-	user, err := s.repo.FindByID(ctx, id)
-	if err != nil {
-		return nil, errorType.ErrUserNotFound
-	}
-
-	user.Name = req.Name
-	if err := s.repo.Update(ctx, user); err != nil {
-		return nil, errorType.ErrFailedToUpdateUser
-	}
-	return toProfile(user), nil
-}
-
-func (s *authService) DeleteAccount(ctx context.Context, id uuid.UUID) error {
-	if err := s.repo.Delete(ctx, id); err != nil {
-		return errorType.ErrFailedToDeleteUser
-	}
-	return nil
-}
-
 func (s *authService) SendVerifyEmail(ctx context.Context, email string) error {
 	user, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
@@ -246,5 +203,9 @@ func toProfile(u *models.User) *UserProfile {
 		Name:          u.Name,
 		Email:         u.Email,
 		EmailVerified: u.EmailVerified,
+		ImageUrl:      u.ImageUrl,
+		DateOfBirth:   u.DateOfBirth,
+		Address:       u.Address,
+		PhoneNumber:   u.PhoneNumber,
 	}
 }

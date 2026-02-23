@@ -34,7 +34,11 @@ func NewRouter(db *gorm.DB, redis *cache.Client, cfg *config.Config) *gin.Engine
 	taskClient := tasks.NewClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 
 	authSvc := services.NewAuthService(userRepo, otpRepo, mailService, taskClient, cfg.JWTSecret, cfg.JWTExpiryHours)
+
+	userSvc := services.NewUserService(userRepo, taskClient)
+
 	authHandler := handlers.NewAuthHandler(authSvc)
+	userHandler := handlers.NewUserHandler(userSvc)
 	healthHandler := handlers.NewHealthHandler(db, redis)
 
 	// --- Shorthand so routes stay readable ---
@@ -59,9 +63,9 @@ func NewRouter(db *gorm.DB, redis *cache.Client, cfg *config.Config) *gin.Engine
 		// Protected user routes (JWT required)
 		users := v1.Group("/users")
 		{
-			users.GET("/", withAuth, authHandler.GetProfile)
-			users.PUT("/", withAuth, withTx, authHandler.UpdateProfile)
-			users.DELETE("/", withAuth, withTx, authHandler.DeleteAccount)
+			users.GET("/", withAuth, userHandler.GetProfile)
+			users.PUT("/", withAuth, withTx, userHandler.UpdateProfile)
+			users.DELETE("/", withAuth, withTx, userHandler.DeleteProfile)
 
 		}
 	}
