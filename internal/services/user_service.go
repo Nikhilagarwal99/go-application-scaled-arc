@@ -2,11 +2,13 @@ package services
 
 import (
 	"context"
+	"mime/multipart"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/repository"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/tasks"
+	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/pkg/errorType"
 )
 
@@ -24,11 +26,11 @@ type UserProfile struct {
 }
 
 type UpdateProfileRequest struct {
-	Name        string    `json:"name" binding:"required,min=2,max=100"`
-	ImageUrl    string    `json:"image_url"`
-	DateOfBirth time.Time `json:"date_of_birth"`
-	Address     string    `json:"address"`
-	PhoneNumber string    `json:"phone_number"`
+	Name        string                `json:"name" binding:"required,min=2,max=100"`
+	ImageUrl    *multipart.FileHeader `form:"image_url" `
+	DateOfBirth time.Time             `json:"date_of_birth"`
+	Address     string                `json:"address"`
+	PhoneNumber string                `json:"phone_number"`
 }
 
 type UserService interface {
@@ -40,12 +42,14 @@ type UserService interface {
 type userService struct {
 	userRepo   repository.UserRepository
 	taskClient *tasks.Client
+	storage    utils.StorageProvider
 }
 
-func NewUserService(userRepo repository.UserRepository, taskClient *tasks.Client) *userService {
+func NewUserService(userRepo repository.UserRepository, taskClient *tasks.Client, storage utils.StorageProvider) *userService {
 	return &userService{
 		userRepo:   userRepo,
 		taskClient: taskClient,
+		storage:    storage,
 	}
 }
 
@@ -67,7 +71,26 @@ func (s *userService) UpdateProfile(ctx context.Context, id uuid.UUID, req *Upda
 
 	//if image binary file is there then upload to cloud storage using go routine and update image url
 
+	if req.ImageUrl != nil {
+		file, err := req.ImageUrl.Open()
+
+		if err != nil {
+			return nil, errorType.ErrFailedToReadFile
+		}
+		defer file.Close()
+
+		url, err := utils.UploadFile(ctx, s.storage, file, req.ImageUrl, "UserProfilePictureAssets")
+		if err != nil {
+			return nil, errorType.ErrFailedToUploadImage
+		}
+		user.ImageUrl = url
+	}
+
 	user.Name = req.Name
+	user.Address = req.Address
+	user.DateOfBirth = req.DateOfBirth
+	user.PhoneNumber = req.PhoneNumber
+
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, errorType.ErrFailedToUpdateUser
 	}

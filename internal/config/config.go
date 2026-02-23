@@ -39,6 +39,11 @@ type Config struct {
 	RedisAddr     string
 	RedisPassword string
 	RedisDB       int
+
+	AWSRegion    string
+	AWSAccessKey string
+	AWSSecretKey string
+	AWSBucket    string
 }
 
 // Load reads environment variables and returns a Config struct.
@@ -88,6 +93,12 @@ func Load() *Config {
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		RedisDB:       redisDB,
+
+		// AWS
+		AWSRegion:    getEnv("AWS_REGION", "ap-south-1"),
+		AWSAccessKey: getEnv("AWS_ACCESS_KEY", ""),
+		AWSSecretKey: getEnv("AWS_SECRET_KEY", ""),
+		AWSBucket:    getEnv("AWS_BUCKET", ""),
 	}
 }
 

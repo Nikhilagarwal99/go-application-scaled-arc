@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/services"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/pkg/response"
@@ -28,10 +30,24 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	userID := mustUserID(c)
 
+	// Parse multipart form — 10MB max file size
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil {
+		response.ValidationError(c, fmt.Errorf("failed to parse form: %w", err))
+		return
+	}
+
 	var req services.UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.ValidationError(c, err)
 		return
+	}
+
+	// Attach file if present — optional
+	file, header, err := c.Request.FormFile("image")
+	if err == nil {
+		// File was uploaded
+		defer file.Close()
+		req.ImageUrl = header
 	}
 
 	profile, err := h.userSvc.UpdateProfile(c.Request.Context(), userID, &req)

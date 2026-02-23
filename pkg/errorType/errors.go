@@ -150,4 +150,22 @@ var (
 		Message:    "failed to enqueue task",
 		HTTPStatus: http.StatusInternalServerError,
 	}
+
+	ErrFailedToReadFile = AppError{
+		Code:       "FAILED_TO_READ_FILE",
+		Message:    "failed to read uploaded file",
+		HTTPStatus: http.StatusBadRequest,
+	}
+
+	ErrFailedToUploadImage = AppError{
+		Code:       "FAILED_TO_UPLOAD_IMAGE",
+		Message:    "failed to upload image — please try again",
+		HTTPStatus: http.StatusInternalServerError,
+	}
+
+	ErrRequestTimeout = AppError{
+		Code:       "REQUEST_TIMEOUT",
+		Message:    "request timed out",
+		HTTPStatus: http.StatusRequestTimeout,
+	}
 )
