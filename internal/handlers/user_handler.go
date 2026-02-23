@@ -37,16 +37,14 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	var req services.UpdateProfileRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBind(&req); err != nil {
 		response.ValidationError(c, err)
 		return
 	}
 
-	// Attach file if present — optional
-	file, header, err := c.Request.FormFile("image")
+	// Attach file if present — optional field
+	_, header, err := c.Request.FormFile("image")
 	if err == nil {
-		// File was uploaded
-		defer file.Close()
 		req.ImageUrl = header
 	}
 

@@ -26,11 +26,11 @@ type UserProfile struct {
 }
 
 type UpdateProfileRequest struct {
-	Name        string                `json:"name" binding:"required,min=2,max=100"`
-	ImageUrl    *multipart.FileHeader `form:"image_url" `
-	DateOfBirth time.Time             `json:"date_of_birth"`
-	Address     string                `json:"address"`
-	PhoneNumber string                `json:"phone_number"`
+	Name        string                `form:"name" `
+	ImageUrl    *multipart.FileHeader `form:"image" `
+	DateOfBirth time.Time             `form:"date_of_birth"`
+	Address     string                `form:"address"`
+	PhoneNumber string                `form:"phone_number"`
 }
 
 type UserService interface {
@@ -86,10 +86,21 @@ func (s *userService) UpdateProfile(ctx context.Context, id uuid.UUID, req *Upda
 		user.ImageUrl = url
 	}
 
-	user.Name = req.Name
-	user.Address = req.Address
-	user.DateOfBirth = req.DateOfBirth
-	user.PhoneNumber = req.PhoneNumber
+	if req.Name != "" {
+		user.Name = req.Name
+	}
+
+	if req.Address != "" {
+		user.Address = req.Address
+	}
+
+	if !req.DateOfBirth.IsZero() {
+		user.DateOfBirth = req.DateOfBirth
+	}
+
+	if req.PhoneNumber != "" {
+		user.PhoneNumber = req.PhoneNumber
+	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, errorType.ErrFailedToUpdateUser
