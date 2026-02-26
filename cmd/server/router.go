@@ -5,11 +5,9 @@ import (
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/cache"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/config"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/handlers"
-	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/logger"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/middleware"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/tasks"
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/utils"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"github.com/nikhilAgarwal99/go-application-scaled-arc/internal/repository"
@@ -32,24 +30,20 @@ func NewRouter(db *gorm.DB, redis *cache.Client, cfg *config.Config) *gin.Engine
 	mailService := utils.NewMailService(cfg)
 	userRepo := repository.NewUserRepository(db)
 	otpRepo := repository.NewOTPRepository(redis)
+	s3Client, _ := utils.NewS3Client(cfg)
 
-	s3Client, err := utils.NewS3Client(cfg)
-	if err != nil {
-		logger.Fatal("failed to init S3 client", zap.Error(err))
-	}
-
-	// Task client — connects to same Redis instance
+	// Task client — connects to same Redis instance for Queue and Worker
 	taskClient := tasks.NewClient(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 
 	authSvc := services.NewAuthService(userRepo, otpRepo, mailService, taskClient, cfg.JWTSecret, cfg.JWTExpiryHours)
-
 	userSvc := services.NewUserService(userRepo, taskClient, s3Client)
 
+	// --- Handler wiring ---
 	authHandler := handlers.NewAuthHandler(authSvc)
 	userHandler := handlers.NewUserHandler(userSvc)
 	healthHandler := handlers.NewHealthHandler(db, redis)
 
-	// --- Shorthand so routes stay readable ---
+	// --- Middleware wiring ---
 	withTx := middleware.Transaction(db)
 	withAuth := middleware.Auth(cfg.JWTSecret)
 
